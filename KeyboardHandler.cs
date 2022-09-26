@@ -46,7 +46,7 @@ namespace SimpleMovementJump
             return (keyboardState.IsKeyDown(key) && prevKeyboardState.IsKeyUp(key));
         }
 
-        public bool HasReleasedKey(Keys key)
+        public bool WasKeyReleased(Keys key)
         {
             return (keyboardState.IsKeyUp(key) && prevKeyboardState.IsKeyDown(key));
         }
@@ -69,6 +69,25 @@ namespace SimpleMovementJump
                 foreach (Keys k in keysPressed)
                 {
                     if (prevKeyboardState.IsKeyUp(k))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public bool WasAnyKeyReleased()
+        {
+            Keys[] prevKeysPressed = prevKeyboardState.GetPressedKeys();
+            Keys[] nowKeysPressed = keyboardState.GetPressedKeys();
+
+            if (prevKeysPressed.Length > 0) //if there was a key pressed before
+            {
+                foreach (Keys k in prevKeysPressed) // go through each key that was pressed
+                {
+                    if (keyboardState.IsKeyUp(k)) // check if it is up now
                     {
                         return true;
                     }

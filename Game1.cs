@@ -58,12 +58,13 @@ namespace SimpleMovementJump
 
             gameObjects.Add(new Player(new Vector2(100, 100)));
 
+            /*
             Player p2 = new Player(new Vector2(200, 100));
             p2.keyLeft = Keys.A;
             p2.keyRight = Keys.D;
             p2.keyJump = Keys.W;
             gameObjects.Add(p2);
-
+            */
 
             foreach (IGameObject o in gameObjects)
             {

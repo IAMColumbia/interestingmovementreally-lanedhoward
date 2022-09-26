@@ -12,14 +12,9 @@ using Keys = Microsoft.Xna.Framework.Input.Keys;
 
 namespace SimpleMovementJump
 {
-    internal class Player : IGameObject
+    internal class Player : Sprite
     {
-        public Vector2 position;
-        public Vector2 velocity;
-
-        public string textureName = "pacManSingle";
-        public Texture2D texture;
-
+        
         private KeyboardHandler inputKeyboard;  //Instance of class that handles keyboard input
 
         float horizontalSpeedMax = 8;
@@ -29,6 +24,8 @@ namespace SimpleMovementJump
         float Accel = 1.25f;               //Acceloration
         int jumpHeight = -15;          //Jump impulse
 
+        float DashSpeed = 16;
+
         bool isOnGround = false;                //Hack to stop falling at a certian point
 
         float GroundHeight = 600; // technical debt to hard-code the floor in
@@ -37,10 +34,24 @@ namespace SimpleMovementJump
         public Keys keyRight = Keys.Right;
         public Keys keyJump = Keys.Up;
 
-        public Player(Vector2 _position)
+        public enum PlayerState
         {
-            position = _position;
-            velocity = new Vector2(0, 0);
+            Netral,
+            Dashing
+        }
+
+        public PlayerState currentState;
+
+        private int lastMoveDir = 1;
+        private bool lastWasNeutral = false;
+        private float lastMoveTimer = 0;
+        private float doubleTapTimerMax = 20;
+
+        public Player(Vector2 _position) : base(_position)
+        {
+            textureName = "pacManSingle";
+
+            currentState = PlayerState.Netral;
 
             inputKeyboard = KeyboardHandler.GetKeyboardHandler();
         }
@@ -49,20 +60,121 @@ namespace SimpleMovementJump
 
         }
 
-        public void LoadContent(ContentManager content)
-        {
-            texture = content.Load<Texture2D>(textureName);
-        }
 
-        public void Update(GameTime gameTime)
+
+        public override void Update(GameTime gameTime)
         {
             //Elapsed time since last update
             float time = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
             float timeFactor = time / 1000 * 60; //convert miliseconds to seconds, and seconds to frames at 60 fps. since thats what i am used to.
 
-            
+
 
             //handle move input
+            int move = GetMoveDir();
+
+            bool doubleTapped = WasDoubleTapped(move, timeFactor);
+
+            bool firstFrameStateChange = false;
+
+            if (currentState == PlayerState.Netral && doubleTapped)
+            {
+                currentState = PlayerState.Dashing;
+                firstFrameStateChange = true;
+            }
+
+            //handle jump input
+            bool jump = inputKeyboard.WasKeyPressed(keyJump);
+
+            switch (currentState)
+            {
+                case PlayerState.Netral:
+                    // handle x velocity 
+                    if (move != 0)
+                    {
+
+                        velocity.X += Accel * move * timeFactor;
+
+                        velocity.X = Math.Clamp(velocity.X, -horizontalSpeedMax, horizontalSpeedMax);
+                    }
+                    else
+                    {
+                        //not currently moving, apply friction
+                        if (Math.Abs(velocity.X) >= Friction * timeFactor)
+                        {
+                            velocity.X += Friction * -Math.Sign(velocity.X) * timeFactor;
+                        }
+                        else
+                        {
+                            velocity.X = 0;
+                        }
+                    }
+
+                    // handle y velocity
+                    
+                    if (isOnGround)
+                    {
+                        if (jump)
+                        {
+                            velocity.Y = jumpHeight;
+                        }
+                    }
+                    else
+                    {
+                        velocity.Y += GravityAccel * timeFactor;
+                    }
+                    break;
+                case PlayerState.Dashing:
+                    // handle x velocity 
+                    if (firstFrameStateChange)
+                    {
+
+                        velocity.X = DashSpeed * move;
+
+                    }
+                    else
+                    {
+                        
+                        if (Math.Abs(velocity.X) > horizontalSpeedMax)
+                        {
+                            velocity.X += Friction * -Math.Sign(velocity.X) * timeFactor;
+                        }
+                        else
+                        {
+                            currentState = PlayerState.Netral;
+                        }
+                    }
+
+                    // handle y velocity
+                    if (isOnGround)
+                    {
+                        if (jump)
+                        {
+                            velocity.Y = jumpHeight;
+                        }
+                    }
+                    else
+                    {
+                        velocity.Y += GravityAccel * timeFactor;
+                        velocity.Y = Math.Min(0, velocity.Y);
+                    }
+                    break;
+            }
+
+            //apply velocity
+            position += velocity * timeFactor;
+
+            // do screen collisions
+            UpdateScreenCollisions();
+
+
+            //OutputData = string.Format("PacDir:{0}\nPacLoc:{1}\nGravityDir:{2}\nGravityAccel:{3}\nTime:{4}\njumpHeight:{5}", PacManDir.ToString(),
+            //  PacManLoc.ToString(), GravityDir.ToString(), GravityAccel.ToString(), time, jumpHeight);
+        
+        }
+
+        private int GetMoveDir()
+        {
             int move = 0;
             bool left = inputKeyboard.IsKeyDown(keyLeft);
             bool right = inputKeyboard.IsKeyDown(keyRight);
@@ -83,58 +195,50 @@ namespace SimpleMovementJump
                 }
             }
 
-            //handle jump input
-            bool jump = inputKeyboard.WasKeyPressed(keyJump);
+            return move;
+        }
 
-            // handle x velocity 
-            if (move != 0)
+        private bool WasDoubleTapped(int move, float timeFactor)
+        {
+            if (lastMoveTimer > 0) lastMoveTimer -= 1*timeFactor;
+            
+
+
+            if (lastMoveDir == move)
             {
+                
 
-                velocity.X += Accel * move * timeFactor;
+                if (lastMoveTimer > 0 && lastWasNeutral)
+                {
+                    // this is a double tap!
+                    lastWasNeutral = false;
+                    lastMoveTimer = 0;
+                    return true;
+                }
 
-                velocity.X = Math.Clamp(velocity.X, -horizontalSpeedMax, horizontalSpeedMax);
+                // too slow to be a double tap
+                lastWasNeutral = false;
+                lastMoveDir = move;
+                lastMoveTimer = doubleTapTimerMax;
             }
             else
             {
-                //not currently moving, apply friction
-                if (Math.Abs(velocity.X) >= Friction * timeFactor)
+                if (move == 0)
                 {
-                    velocity.X += Friction * -Math.Sign(velocity.X) * timeFactor;
+                    // returned to neutral
+                    lastWasNeutral = true;
                 }
                 else
                 {
-                    velocity.X = 0;
+                    // swapped diretions.
+                    lastMoveDir = move;
+                    lastMoveTimer = doubleTapTimerMax;
+                    lastWasNeutral = false;
                 }
             }
 
-            // handle y velocity
-
-            if (isOnGround)
-            {
-                if (jump)
-                {
-                    velocity.Y = jumpHeight;
-                }
-            }
-            else
-            {
-                velocity.Y += GravityAccel * timeFactor;
-            }
-
-
-            //apply velocity
-            position += velocity * timeFactor;
-
-            // do screen collisions
-            UpdateScreenCollisions();
-
-
-            //OutputData = string.Format("PacDir:{0}\nPacLoc:{1}\nGravityDir:{2}\nGravityAccel:{3}\nTime:{4}\njumpHeight:{5}", PacManDir.ToString(),
-            //  PacManLoc.ToString(), GravityDir.ToString(), GravityAccel.ToString(), time, jumpHeight);
-        
+            return false;
         }
-
-        
 
         private void UpdateScreenCollisions()
         {
@@ -165,11 +269,20 @@ namespace SimpleMovementJump
             }
         }
 
-        public void Draw(GameTime gameTime, SpriteBatch spriteBatch)
+        public override void Draw(GameTime gameTime, SpriteBatch spriteBatch)
         {
-
-            spriteBatch.Draw(texture, position, Microsoft.Xna.Framework.Color.White);
-
+            if (velocity.X != 0)
+            {
+                if (Math.Sign(velocity.X) == 1)
+                {
+                    spriteEffects = SpriteEffects.None;
+                }
+                else
+                {
+                    spriteEffects = SpriteEffects.FlipHorizontally;
+                }
+            }
+            base.Draw(gameTime, spriteBatch);
         }
 
     }
