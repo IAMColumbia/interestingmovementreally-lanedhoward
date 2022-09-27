@@ -244,14 +244,14 @@ namespace SimpleMovementJump
         {
             //Keep PacMan On Screen
             int roomWidth = 1024; // TODO had to hard - code screen width, fix later
-            if (position.X > roomWidth - texture.Width)
+            if (position.X > roomWidth - origin.X)
             {
                 //Negate X
-                position.X = roomWidth - texture.Width;
+                position.X = roomWidth - origin.X;
             }
-            if (position.X < 0)
+            if (position.X < 0 + origin.X)
             {
-                position.X = 0;
+                position.X = 0 + origin.X;
             }
 
             //Y stop at 400
@@ -271,6 +271,7 @@ namespace SimpleMovementJump
 
         public override void Draw(GameTime gameTime, SpriteBatch spriteBatch)
         {
+            //flip horizontal
             if (velocity.X != 0)
             {
                 if (Math.Sign(velocity.X) == 1)
@@ -282,6 +283,19 @@ namespace SimpleMovementJump
                     spriteEffects = SpriteEffects.FlipHorizontally;
                 }
             }
+
+            //squash/stretch
+            
+            scale.X = 1 + (0.4f * Math.Clamp(Math.Abs(velocity.Y) / jumpHeight, -1.5f, 1f));
+            if (currentState == PlayerState.Dashing)
+            {
+                scale.Y = 1 - (0.4f * Math.Clamp(Math.Abs(velocity.X) / DashSpeed, 0.25f, 1f));
+            }
+            else
+            {
+                scale.Y = 1;
+            }
+
             base.Draw(gameTime, spriteBatch);
         }
 
